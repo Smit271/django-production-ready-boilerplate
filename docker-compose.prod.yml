@@ -1,0 +1,82 @@
+version: '3.7'
+
+services:
+  web:
+    image: YourDockerhubUsername/pg_management:latest
+    command: gunicorn pg_management.wsgi:application --bind 0.0.0.0:8000
+    volumes:
+      - static_volume:/home/app/web/staticfiles
+      - media_volume:/home/app/web/mediafiles
+    expose:
+      - 8000
+    env_file:
+      - .env.prod
+    depends_on:
+      - db
+  db:
+    image: postgres:12.0-alpine
+    volumes:
+      - pg_management_postgres_data:/var/lib/postgresql/data/
+    env_file:
+      - .env.prod.db
+  nginx-proxy:
+    container_name: nginx-proxy
+    image: YourDockerhubUsername/pg_management-nginx:latest
+    restart: always
+    ports:
+      - 443:443
+      - 80:80
+    volumes:
+      - static_volume:/home/app/web/staticfiles
+      - media_volume:/home/app/web/mediafiles
+      - certs:/etc/nginx/certs
+      - html:/usr/share/nginx/html
+      - vhost:/etc/nginx/vhost.d
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+    depends_on:
+      - web
+  nginx-proxy-letsencrypt:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    env_file:
+      - .env.prod.proxy-companion
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - certs:/etc/nginx/certs
+      - html:/usr/share/nginx/html
+      - vhost:/etc/nginx/vhost.d
+    depends_on:
+      - nginx-proxy
+
+  prometheus:
+    image: YourDockerhubUsername/pg_management-prometheus:latest
+    restart: always
+
+  grafana:
+    image: YourDockerhubUsername/pg_management-grafana:latest
+    restart: always
+    volumes:
+      - pg_management_grafana:/var/lib/grafana
+    ports:
+      - 3000:3000
+    depends_on:
+      - prometheus
+    env_file:
+      - .env.prod.grafana
+
+volumes:
+  pg_management_postgres_data:
+    external: true
+  static_volume:
+    external: true
+  media_volume:
+    external: true
+  certs:
+    external: true
+  html:
+    external: true
+  vhost:
+    external: true
+
+  pg_management_grafana:
+    external: true
+ 
